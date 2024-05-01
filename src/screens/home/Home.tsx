@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { useEffect, useState } from 'react';
 import { Alert, ScrollView, View } from 'react-native';
-import { BottomNavigation, Button, Card, Chip, Icon, Button as PaperButton, TextInput as PaperTextInput, Searchbar, Text, useTheme } from 'react-native-paper';
+import { BottomNavigation, Button, Card, Chip, Icon, Button as PaperButton, TextInput as PaperTextInput, Searchbar, Text, TextInput, useTheme } from 'react-native-paper';
 
 const ResourceRoute = () => {
     const theme = useTheme();
@@ -129,7 +129,7 @@ const ConfirmarSolicitacao = () => {
     const [solicitacoes, setSolicitacoes] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
-    const handleGetAll = async () => {
+    const handleGetAllPendentes = async () => {
         try {
             const token = await AsyncStorage.getItem('token');
 
@@ -146,7 +146,7 @@ const ConfirmarSolicitacao = () => {
         }
     }
 
-    useEffect(() => { handleGetAll() }, []);
+    useEffect(() => { handleGetAllPendentes() }, []);
 
     const handleConfirmar = async (id: any) => {
         try {
@@ -154,13 +154,11 @@ const ConfirmarSolicitacao = () => {
 
             const token = await AsyncStorage.getItem('token');
 
-            console.log(token);
-
             await axios.post(`${baseUrl}/${id}/confirmar`, {}, {
                 headers: { Authorization: `Bearer ${token}` }
             })
 
-            handleGetAll();
+            handleGetAllPendentes();
         } catch (error) {
             Alert.alert(`Não foi possível confirmar a solicitação. Tente novamente mais tarde.`);
             console.error(error);
@@ -192,7 +190,102 @@ const ConfirmarSolicitacao = () => {
     );
 };
 
-const FeedbackRoute = () => <Text>FeedBack</Text>;
+const FeedbackRoute = () => {
+    const baseUrl: string = 'http://192.168.15.111:3000/api/v1/ws-solicitacao';
+    const baseUrlFeedback: string = 'http://192.168.15.111:3000/api/v1/ws-feedback';
+
+    const [solicitacoes, setSolicitacoes] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [nota, setNota] = useState('');
+    const [comentario, setComentario] = useState('');
+    const [expandedCardIndex, setExpandedCardIndex] = useState<number | null>(null);
+
+    const handleGetAll = async () => {
+        try {
+            const token = await AsyncStorage.getItem('token');
+
+            if (!token) {
+                throw new Error(`O token não foi recuperado ${token}`);
+            }
+
+            const response = await axios.get(`${baseUrl}/todas`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            setSolicitacoes(response.data);
+            setLoading(false);
+        } catch (error) {
+            Alert.alert('Não foi possível fazer as busca das solicitações. Tente novamente mais tarde.');
+            setLoading(false);
+        }
+    }
+
+    useEffect(() => { handleGetAll() }, []);
+
+    const handleFeedback = async (avaliadoId: any, solicitacaoId: any) => {
+        try {
+            const token = await AsyncStorage.getItem('token');
+
+            await axios.post(`${baseUrlFeedback}`, {
+                avaliadoId: avaliadoId,
+                solicitacaoId: solicitacaoId,
+                nota: nota,
+                comentario: comentario
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+        } catch (error) {
+            Alert.alert('Não foi possível dar o feedback. Tente novamente mais tarde.');
+            console.error(error);
+        }
+    }
+
+    const toggleCardExpansion = (index: number) => {
+        setExpandedCardIndex(expandedCardIndex === index ? null : index);
+    }
+
+    return (
+        <ScrollView>
+            {loading ? (
+                <Text>Carregando solicitações, aguarde...</Text>
+            ) : solicitacoes.length === 0 ? (
+                <Text>Você não tem nenhuma solicitação, faça uma na aba ao lado.</Text>
+            ) : (
+                solicitacoes.map((solicitacao: any) => (
+                    <Card key={solicitacao.id} style={{ margin: 10 }}>
+                        <Card.Content>
+                            <Chip
+                                selectedColor='#FFF'
+                                style={solicitacao.status === 'pendente' ? { backgroundColor: '#FFD700' } : { backgroundColor: '#32CD32' }}
+                            >
+                                Status: {solicitacao ? solicitacao.status : 'Não tem dados desse recurso'}
+                            </Chip>
+                            <Text style={{ marginTop: 10, fontWeight: '500' }}>Nome do proprietário: {solicitacao.proprietario.nome}</Text>
+                            <Button style={{ marginTop: 20 }} onPress={() => toggleCardExpansion(solicitacao.id)} icon={'emoticon-excited'}>Dar um feedback</Button>
+                        </Card.Content>
+                        {expandedCardIndex === solicitacao.id && (<Card.Content>
+                            <TextInput
+                                mode='outlined'
+                                label='Nota'
+                                value={nota}
+                                onChangeText={text => setNota(text)}
+                            />
+                            <TextInput
+                                mode='outlined'
+                                label='Comentário'
+                                value={comentario}
+                                onChangeText={text => setComentario(text)}
+                            />
+                            <Button onPress={() => {
+                                handleFeedback(solicitacao.proprietario.id, solicitacao.id);
+                                setExpandedCardIndex(null);
+                            }}>Enviar Feedback</Button>
+                        </Card.Content>)}
+                    </Card>
+                )))}
+        </ScrollView>
+    );
+};
 
 export const Home = () => {
     const [index, setIndex] = useState(0);
