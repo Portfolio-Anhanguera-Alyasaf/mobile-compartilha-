@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { useState } from 'react';
-import { Alert, View } from 'react-native';
-import { BottomNavigation, Card, Button as PaperButton, TextInput as PaperTextInput, Searchbar, Text, useTheme } from 'react-native-paper';
+import { useEffect, useState } from 'react';
+import { Alert, ScrollView, View } from 'react-native';
+import { BottomNavigation, Button, Card, Chip, Icon, Button as PaperButton, TextInput as PaperTextInput, Searchbar, Text, useTheme } from 'react-native-paper';
 
 const ResourceRoute = () => {
     const theme = useTheme();
@@ -15,8 +15,6 @@ const ResourceRoute = () => {
     const handleSalvarRecurso = async () => {
         try {
             const token = await AsyncStorage.getItem('token');
-
-            console.log(token);
 
             await axios.post(`${baseUrl}`, {
                 nome: nomeRecurso,
@@ -103,28 +101,100 @@ const SolicitacaoRoute = () => {
                 onIconPress={handlePesquisar}
             />
             <View style={{ marginTop: 30 }}>
-                {cardIsVisible ? <Card>
-                    <Card.Title title="Recurso solicitado" />
-                    <Card.Content>
-                        <Text>Status: {dados ? dados.status : 'Não tem dados desse recurso'}</Text>
-                        <Text>ID: {dados ? dados.id : 'Não tem dados desse recurso'}</Text>
-                        <Text>Nome do recurso: {dados && dados.recurso ? dados.recurso.nome : 'Não tem dados desse recurso'}</Text>
-                        <Text>Nome do usuário: {dados && dados.recurso && dados.recurso.usuario ? dados.recurso.usuario.nome : 'Não tem dados desse recurso'}</Text>
-                    </Card.Content>
-
-                </Card> : cardIsVisible}
+                {cardIsVisible && dados ? (
+                    <Card mode='elevated' theme={{ colors: { elevation: { level1: '#F8F8FF' } } }} style={{ width: 250 }}>
+                        <Text style={{ fontSize: 15, marginBottom: 20, marginTop: 10, textAlign: 'center', fontWeight: 'bold' }}>Recurso solicitado com sucesso<Icon source={'check'} size={20}></Icon></Text>
+                        <Card.Content>
+                            <Chip
+                                selectedColor='#FFF'
+                                style={dados.status === 'pendente' ? { backgroundColor: '#FFD700' } : { backgroundColor: '#32CD32' }}
+                            >
+                                Status: {dados.status}
+                            </Chip>
+                            <Text style={{ marginTop: 20, fontWeight: '500' }}>Nome do recurso: {dados.recurso ? dados.recurso.nome : 'Não tem dados desse recurso'}</Text>
+                            <Text style={{ marginTop: 10, fontWeight: '500' }}>Nome do usuário: {dados.recurso && dados.recurso.usuario ? dados.recurso.usuario.nome : 'Não tem dados desse recurso'}</Text>
+                        </Card.Content>
+                    </Card>
+                ) : (
+                    <Text>Nenhum resultado encontrado</Text>
+                )}
             </View>
         </View>
     );
 };
 
-const ConfirmarSolicitacao = () => <Text>Confirmação</Text>;
+const ConfirmarSolicitacao = () => {
+    const baseUrl: string = 'http://192.168.15.111:3000/api/v1/ws-solicitacao/pendentes';
+
+    const [solicitacoes, setSolicitacoes] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    const handleGetAll = async () => {
+        try {
+            const token = await AsyncStorage.getItem('token');
+
+            const response = await axios.get(`${baseUrl}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            setSolicitacoes(response.data);
+            setLoading(false);
+        } catch (error) {
+            Alert.alert('Não foi possível fazer a requisição. Tente novamente mais tarde.');
+            setLoading(false);
+            console.error(error);
+        }
+    }
+
+    useEffect(() => { handleGetAll() }, []);
+
+    const handleConfirmar = async (id: any) => {
+        try {
+            const baseUrl: string = 'http://192.168.15.111:3000/api/v1/ws-solicitacao';
+
+            const token = await AsyncStorage.getItem('token');
+
+            console.log(token);
+
+            await axios.post(`${baseUrl}/${id}/confirmar`, {}, {
+                headers: { Authorization: `Bearer ${token}` }
+            })
+
+            handleGetAll();
+        } catch (error) {
+            Alert.alert(`Não foi possível confirmar a solicitação. Tente novamente mais tarde.`);
+            console.error(error);
+        }
+    }
+
+    return (
+        <ScrollView>
+            {loading ? (
+                <Text>Carregando solicitações...</Text>
+            ) : solicitacoes.length === 0 ? (
+                <Text>Não tem nenhuma solicitação. Faça uma na aba ao lado.</Text>
+            ) : (
+                solicitacoes.map((solicitacao: any) => (
+                    <Card key={solicitacao.id} style={{ margin: 10 }}>
+                        <Card.Content>
+                            <Chip
+                                selectedColor='#FFF'
+                                style={solicitacao.status === 'pendente' ? { backgroundColor: '#FFD700' } : { backgroundColor: '#32CD32' }}
+                            >
+                                Status: {solicitacao ? solicitacao.status : 'Não tem dados desse recurso'}
+                            </Chip>
+                            <Text style={{ marginTop: 10, fontWeight: '500' }}>Nome do recurso: {solicitacao.recurso.nome}</Text>
+                            <Button style={{ marginTop: 20 }} onPress={() => handleConfirmar(solicitacao.id)}>Confirmar Solicitação</Button>
+                        </Card.Content>
+                    </Card>
+                )))}
+        </ScrollView>
+    );
+};
 
 const FeedbackRoute = () => <Text>FeedBack</Text>;
 
 export const Home = () => {
-    const theme = useTheme();
-
     const [index, setIndex] = useState(0);
     const [routes] = useState([
         { key: 'resource', title: 'Recursos', focusedIcon: 'archive', unfocusedIcon: 'archive-outline' },
